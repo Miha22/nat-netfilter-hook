@@ -5,7 +5,6 @@
 #include <nat_module.h>
 
 #define PUB_IP 0x55566465//85.86.100.101 hexadecimal
-#define PUB_PORT 443;
 
 DEFINE_HASHTABLE(nat_table, 16);
 
@@ -48,12 +47,13 @@ uint8_t nat_outgoing_hook(void *priv, struct sk_buff *skb, const struct nf_hook_
     if (ip_header->protocol == IPPROTO_TCP || ip_header->protocol == IPPROTO_UDP) {
         uint32_t src_ip = ip_header->saddr;
         ip_header->saddr = htonl(PUB_IP);
+        uint16_t new_public_port = assign_public_port();
         csum_replace4(&ip_header->check, src_ip, htonl(PUB_IP));
 
         if(ip_header->protocol == IPPROTO_UDP) {
             udp_header = udp_hdr(skb);
             uint16_t src_port = udp_header->source;
-            udp_header->source = assign_public_port();;
+            udp_header->source = new_public_port;
 
             csum_replace4(&udp_header->check, src_ip, htonl(PUB_IP));
             csum_replace4(&udp_header->check, src_port, tcp_header->source);
@@ -61,12 +61,12 @@ uint8_t nat_outgoing_hook(void *priv, struct sk_buff *skb, const struct nf_hook_
         else if(ip_header->protocol == IPPROTO_TCP) {
             tcp_header = tcp_hdr(skb);
             uint16_t src_port = tcp_header->source;
-            tcp_header->source = assign_public_port();;
+            tcp_header->source = new_public_port;
 
             csum_replace4(&tcp_header->check, src_ip, htonl(PUB_IP));
             csum_replace4(&tcp_header->check, src_port, tcp_header->source);
         }
-        add_nat_entry(src_ip, src_port, htonl(PUB_IP), PUB_PORT);
+        add_nat_entry(src_ip, src_port, htonl(PUB_IP), new_public_port);
     }
 
     return NF_ACCEPT;
@@ -141,10 +141,9 @@ static void __exit nat_exit(void) {
     }
 }
 
-
 module_init(nat_init);
 module_exit(nat_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Den");
+MODULE_AUTHOR("Den"); 
 MODULE_DESCRIPTION("custom NAT netfilter hook");
